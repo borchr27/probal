@@ -11,7 +11,7 @@
 #SBATCH --mem-per-cpu=2G
 #SBATCH --cpus-per-task=1
 
-source python-virtual-environments/xpal/bin/activate
+# source python-virtual-environments/xpal/bin/activate
 
 dir=~/xpal/src
 export PYTHONPATH="${PYTHONPATH}":"$dir"
@@ -41,3 +41,14 @@ done
 echo "$i"
 wait
 
+# Place the 'website_tfidf_data' csv file that is created from running the ANALYSIS.py file in the probal/data folder
+# Then run the following command to create the csv output file (then plot the results)
+# python experimental_setup_csv.py \
+#   --query_strategy xpal-0.001 \
+#   --data_set tfidf_data \
+#   --results_path ../../results \
+#   --test_ratio 0.25 \
+#   --bandwidth mean \
+#   --budget 612 \
+#   --seed 1 \
+#   --kernel cosine

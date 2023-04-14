@@ -13,7 +13,6 @@ import math
 
 from argparse import ArgumentParser
 
-from copy import deepcopy
 
 from scipy.spatial.distance import cdist
 
@@ -34,9 +33,17 @@ from src.query_strategies.query_by_committee import QBC
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.kernel_ridge import KernelRidge
-
 from time import process_time
 
+##
+from copy import copy, deepcopy
+from sklearn import metrics
+from matplotlib import pyplot as plt
+from sklearn.metrics import confusion_matrix
+from sklearn.svm import LinearSVC
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn import preprocessing
+##
 
 def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, bandwidth, seed):
     """
@@ -63,9 +70,27 @@ def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, band
         Random seed.
     """
     # --------------------------------------------- LOAD DATA ----------------------------------------------------------
-    X, y = load_data(data_set_name=data_set)
+    ##
+    if data_set == 'new_vect_additional':
+        Xo, yo = load_data(data_set_name='new_vect')
+        Xa, ya = load_data(data_set_name='new_vect_additional')
+        X = np.vstack((Xo, Xa))
+        y = np.hstack((yo, ya))
+        print(X.shape, y.shape)
+    else:
+        try:
+            X, y = load_data(data_set_name=data_set)
+        except:
+            print('Data set {} not found. Conducting alternative load'.format(data_set))
+            # load x and y from a single csv
+            text_data = pd.read_csv('../../data/{}.csv'.format(data_set))
+            text_data = text_data[text_data['x'].str.len() > 50] # apply filter to remove short texts
+            X = text_data.iloc[:, :-1].values
+            y = text_data.iloc[:, -1].values
+            print(X.shape, y.shape)
+
     is_categorical = data_set in ['monks', 'car', 'bankruptcy', 'tic', 'corral']
-    is_text = data_set in ['reports-compendium', 'reports-mozilla']
+    is_text = data_set in ['reports-compendium', 'reports-mozilla', 'text_data_all', 'text_data_original', 'text_data_additional']
     if is_categorical:
         X = OneHotEncoder(sparse=False).fit_transform(X)
         print(X.shape[1])
@@ -85,12 +110,43 @@ def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, band
     # ------------------------------------------- LOAD DATA ----------------------------------------------------
     print('seed: {}'.format(str(seed)))
     test_ratio = float(test_ratio) if test_ratio < 1.0 else int(test_ratio)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=seed)
-    if test_ratio < 1:
-        while not np.array_equal(np.unique(y_train), np.unique(y_test)):
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=seed)
-            seed += 1000
-            print('new seed: {}'.format(seed))
+
+    if data_set == 'new_vect_additional':
+        seed_copy = deepcopy(seed)
+        Xa_train, Xa_test, ya_train, ya_test = train_test_split(Xa, ya, test_size=test_ratio, random_state=seed)
+        if test_ratio < 1:
+            while not np.array_equal(np.unique(ya_train), np.unique(ya_test)):
+                Xa_train, Xa_test, ya_train, ya_test = train_test_split(Xa, ya, test_size=test_ratio, random_state=seed)
+                seed += 1000
+                print('new seed: {}'.format(seed))  
+        
+        seed = seed_copy    
+        Xo_train, Xo_test, yo_train, yo_test = train_test_split(Xo, yo, test_size=test_ratio, random_state=seed)
+        if test_ratio < 1:
+            while not np.array_equal(np.unique(yo_train), np.unique(yo_test)):
+                Xo_train, Xo_test, yo_train, yo_test = train_test_split(Xo, yo, test_size=test_ratio, random_state=seed)
+                seed += 1000
+                print('new seed: {}'.format(seed))      
+
+        # combine/stack Xa and Xo and ya and yo 
+        X_train = np.vstack((Xo_train, Xa_train))
+        X_test = np.vstack((Xo_test, Xa_test))
+        y_train = np.hstack((yo_train, ya_train))
+        y_test = np.hstack((yo_test, ya_test))
+    elif data_set in ['text_data_all', 'text_data_original', 'text_data_additional']:
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=seed)
+        if test_ratio < 1:
+            while not np.array_equal(np.unique(y_train), np.unique(y_test)):
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=seed)
+                seed += 1000
+                print('new seed: {}'.format(seed))
+    else:
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=seed)
+        if test_ratio < 1:
+            while not np.array_equal(np.unique(y_train), np.unique(y_test)):
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_ratio, random_state=seed)
+                seed += 1000
+                print('new seed: {}'.format(seed))
 
     budget_csv = budget
     if budget == 'all':
@@ -111,6 +167,24 @@ def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, band
         scaler = StandardScaler().fit(X_train)
         X_train = scaler.transform(X_train)
         X_test = scaler.transform(X_test)
+
+    # ------------------------------------------ VECORIZE HERE! --------------------------------------------------------
+    if data_set in ['text_data_all', 'text_data_original', 'text_data_additional']:
+        vect = TfidfVectorizer(analyzer="word", strip_accents="unicode", max_features=9000, stop_words="english")
+        X_train = pd.DataFrame(X_train)
+        X_test = pd.DataFrame(X_test)
+
+        X_train = X_train[0].to_numpy()
+        X_test = X_test[0].to_numpy()
+        X_train = vect.fit_transform(X_train)
+        X_test = vect.transform(X_test)
+
+        X_train = X_train.toarray()
+        X_test = X_test.toarray()
+
+        le = preprocessing.LabelEncoder()
+        y_train = le.fit_transform(y_train)
+        y_test = le.transform(y_test)
 
     # set up data set
     data = DataSet(X_train)
@@ -168,11 +242,13 @@ def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, band
         selection_strategy = QBC(data_set=data, model=pwc_cpy, random_state=seed)
     else:
         raise ValueError(
-            "'query_strategy' must be in [xpal, pal, lc, sm, entropy, log-loss, zero-one-loss, random, optimal]")
+            "'query_strategy' must be in [xpal, pal, lc, sm, entropy, log-loss, zero-one-loss, random, optimal, qbc, alce]")
 
     # ----------------------------------------- ACTIVE LEARNING CYCLE --------------------------------------------------
     labeled = []
     times = [0]
+    choosen_samples = []
+    choosen_samples_labels = []
     for b in range(budget):
         print("budget: {}".format(b))
         # evaluate performance
@@ -185,15 +261,23 @@ def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, band
         sample_id = selection_strategy.make_query()
         times.append(process_time() - t)
         print(sample_id)
+        choosen_samples.append(sample_id[0])
 
         # update training data
         data.update_entries(sample_id, y_train[sample_id])
+        choosen_samples_labels.append(y_train[sample_id][0])
 
         # update statistics
         labeled.append(sample_id[0])
 
         # retrain classifier
         pwc.fit(data.X_[labeled], data.y_[labeled])
+
+    # export labeled data as csv
+    # df = pd.DataFrame({'labeled': labeled})
+    # relative_path = '{}/labeled_{}.csv'.format(results_path, csv_name)
+    # path = os.path.join(abs_path, relative_path)
+    # df.to_csv(path, index_label='index')
 
     # evaluate final performance
     if test_ratio != 1:
@@ -203,8 +287,41 @@ def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, band
     # get absolute path
     abs_path = os.path.abspath(os.path.dirname(__file__))
 
+    # create csv file to save samples that were chosen
+    if seed%100 == 7:
+        df_samples = pd.DataFrame({'samples': choosen_samples, 'labels': choosen_samples_labels})
+        relative_path = '{}/samples_{}.csv'.format(results_path, csv_name)
+        path = os.path.join(abs_path, relative_path)
+        df_samples.to_csv(path, index_label='index')
+
+    # # plot confusion matrix
+    # y_pred = pwc.predict(X_test)
+    # y_labels = ['Atm', 'Beauty', 'Bills And Household', 'Car' ,'Children' ,'Consumer Goods',
+    #             'Culture', 'Digital Services' ,'Drugstore', 'Electronics', 'Fashion',
+    #             'Financial Services', 'Food And Drink' ,'Freetime', 'Groceries', 'Health',
+    #             'House And Garden', 'Investments', 'Pets' ,'Professional Services',
+    #             'Shopping Online', 'Sport', 'Travel']
+    # # create csv with test and predicted labels
+    # cm_data = pd.DataFrame({'test': y_test, 'pred': y_pred})
+    # relative_path = '{}/test_pred_{}.csv'.format(results_path, csv_name)
+    # path = os.path.join(abs_path, relative_path)
+    # cm_data.to_csv(path, index_label='index')
+
+    # cm = confusion_matrix(y_test, y_pred)
+    # disp = metrics.ConfusionMatrixDisplay(confusion_matrix=cm)
+    # disp.plot()
+    # # save confusion matrix to as pdf
+    # relative_path = '{}/cm_{}.pdf'.format(results_path, csv_name)
+    # path = os.path.join(abs_path, relative_path)
+    # category_bins = [i for i in range(len(y_labels))]
+    # plt.xticks(category_bins, y_labels, rotation='vertical', fontsize=8)
+    # plt.yticks(category_bins, y_labels, fontsize=8)
+    # plt.savefig(path, bbox_inches='tight')
+    # # plt.show()
+    # plt.close()
+
     # store performance results
-    print(np.mean(times))
+    print(f'mean time: {np.mean(times)}')
     perf_results['time'] = times
     df = pd.DataFrame(perf_results)
     relative_path = '{}/performances_{}.csv'.format(results_path, csv_name)
@@ -214,15 +331,15 @@ def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, band
 
 def main():
     parser = ArgumentParser(description='Parameters of experimental setup')
-    parser.add_argument('--data_set', type=str, default='iris', help='name of data set, see data_set_ids.csv for more information, '
+    parser.add_argument('--data_set', type=str, default='text_data_all', help='name of data set, see data_set_ids.csv for more information, '
                                                                      'default=iris')
     parser.add_argument('--results_path', type=str, help='absolute path for saving results: default=../../results')
-    parser.add_argument('--query_strategy', default='xpal-0.001', type=str, help='name of active learning strategy: '
+    parser.add_argument('--query_strategy', default='random', type=str, help='name of active learning strategy: '
                                                                              '[xpal-0.001, pal-1, lc, alce, '
                                                                              'zero-one-loss, qbc, optimal], default=xpal-0.001')
-    parser.add_argument('--budget', default=200, help='number of active learning iterations: default=200')
-    parser.add_argument('--test_ratio', type=float, default=0.4, help='ratio of test samples: default=0.4')
-    parser.add_argument('--kernel', type=str, default='rbf', help='kernel used by Parzen window classifier: '
+    parser.add_argument('--budget', default=100, help='number of active learning iterations: default=200')
+    parser.add_argument('--test_ratio', type=float, default=0.25, help='ratio of test samples: default=0.4')
+    parser.add_argument('--kernel', type=str, default='cosine', help='kernel used by Parzen window classifier: '
                                                                   '[rbf, categorical, cosine], default=rbf')
     parser.add_argument('--bandwidth', default='mean', help='kernel bandwidth: default=mean')
     parser.add_argument('--seed', type=int, default=1, help='seed for reproducibility: default=0')
