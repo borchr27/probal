@@ -45,7 +45,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn import preprocessing
 ##
 
-def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, bandwidth, seed):
+def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, bandwidth, seed, category_filter):
     """
     Run experiments to compare query selection strategies.
     Experimental results are stored in a .csv-file.
@@ -84,10 +84,28 @@ def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, band
             print('Data set {} not found. Conducting alternative load'.format(data_set))
             # load x and y from a single csv
             text_data = pd.read_csv('../../data/{}.csv'.format(data_set))
-            text_data = text_data[text_data['x'].str.len() > 50] # apply filter to remove short texts
+            # text_data = text_data[text_data['x'].str.len() > 50] # apply filter to remove short texts
             X = text_data.iloc[:, :-1].values
             y = text_data.iloc[:, -1].values
             print(X.shape, y.shape)
+    
+    if category_filter != None:
+        # combine x and y into a pandas df 
+        category_reduction_df = pd.DataFrame(X)
+        category_reduction_df['y'] = y
+        
+        # remove categories with less than category_filter samples
+        category_reduction_df = category_reduction_df.groupby('y').filter(lambda x: len(x) > category_filter)
+        
+        # remove categories with more than category_filter samples
+        # category_reduction_df = category_reduction_df.groupby('y').filter(lambda x: len(x) < category_filter)
+        
+        # remove the groceries category
+        # category_reduction_df = category_reduction_df[category_reduction_df['y'] != 'Groceries']
+        print(category_reduction_df['y'].value_counts())
+        # split into x and y
+        X = category_reduction_df.iloc[:, :-1].values
+        y = category_reduction_df.iloc[:, -1].values
 
     is_categorical = data_set in ['monks', 'car', 'bankruptcy', 'tic', 'corral']
     is_text = data_set in ['reports-compendium', 'reports-mozilla', 'text_data_all', 'text_data_original', 'text_data_additional']
@@ -159,7 +177,8 @@ def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, band
     print(budget)
 
     # --------------------------------------------- CSV NAMES ----------------------------------------------------------
-    csv_name = '{}_{}_{}_{}_{}_{}_{}'.format(data_set, query_strategy, test_ratio, kernel, bandwidth, budget_csv, seed)
+    category_filter_name = 'cat_fltr_{}'.format(category_filter) if category_filter != None else ''
+    csv_name = '{}_{}_{}_{}_{}_{}_{}_{}'.format(data_set, query_strategy, test_ratio, kernel, bandwidth, budget_csv, seed, category_filter_name)
 
     # ------------------------------------------ PREPROCESS DATA -------------------------------------------------------
     # standardize data
@@ -343,9 +362,10 @@ def main():
                                                                   '[rbf, categorical, cosine], default=rbf')
     parser.add_argument('--bandwidth', default='mean', help='kernel bandwidth: default=mean')
     parser.add_argument('--seed', type=int, default=1, help='seed for reproducibility: default=0')
+    parser.add_argument('--category_filter', type=int, default=None, help='min number of samples per category')
     args = parser.parse_args()
     run(data_set=args.data_set, results_path=args.results_path, query_strategy=args.query_strategy, budget=args.budget,
-        test_ratio=args.test_ratio, kernel=args.kernel, bandwidth=args.bandwidth, seed=args.seed)
+        test_ratio=args.test_ratio, kernel=args.kernel, bandwidth=args.bandwidth, seed=args.seed, category_filter=args.category_filter)
 
 
 if __name__ == '__main__':

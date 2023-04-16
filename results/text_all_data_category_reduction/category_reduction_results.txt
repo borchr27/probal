@@ -1,0 +1,62 @@
+
+--category_filter 20
+Food And Drink           262
+Car                       91
+Groceries                 84
+Health                    72
+Travel                    65
+Beauty                    49
+House And Garden          47
+Professional Services     37
+Consumer Goods            35
+Fashion                   28
+Pets                      26
+Sport                     21
+
+--category_filter 30
+Food And Drink           262
+Car                       91
+Groceries                 84
+Health                    72
+Travel                    65
+Beauty                    49
+House And Garden          47
+Professional Services     37
+Consumer Goods            35
+
+--category_filter 40
+Food And Drink      262
+Car                  91
+Groceries            84
+Health               72
+Travel               65
+Beauty               49
+House And Garden     47
+
+--category_filter 50
+Food And Drink    262
+Car                91
+Groceries          84
+Health             72
+Travel             65
+
+--category_filter 60 CATEGORIES WITH LESS THAN 60 DATA POINTS
+Beauty                   49
+House And Garden         47
+Professional Services    37
+Consumer Goods           35
+Fashion                  28
+Pets                     26
+Sport                    21
+Digital Services         20
+Electronics              20
+Bills And Household      19
+Culture                  16
+Freetime                 16
+Financial Services       10
+Children                  9
+Drugstore                 8
+Atm                       8
+Shopping Online           7
+Investments               7
+

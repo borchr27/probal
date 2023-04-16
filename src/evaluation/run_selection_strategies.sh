@@ -4,7 +4,7 @@
 #SBATCH -o rss.out                          # name of output file for this submission script
 #SBATCH -e rss.err                          # name of error file for this submission script
 
-# sbatch --export= data_set_name='text_data_all' run_selection_strategies.sh
+# sbatch --export=data_set_name='text_data_all' run_selection_strategies.sh
 
 for h in random xpal alce qbc log-loss entropy
 do
@@ -17,7 +17,7 @@ do
             --results_path ../../results \
             --test_ratio 0.25 \
             --bandwidth mean \
-            --budget 10 \
+            --budget 300 \
             --seed $i \
             --kernel cosine \
             &
