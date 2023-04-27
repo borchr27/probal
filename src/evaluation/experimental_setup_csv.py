@@ -230,6 +230,7 @@ def run(data_set, results_path, query_strategy, budget, test_ratio, kernel, band
     # create classifier
     gamma = 0.5 * (bandwidth ** (-2))
     pwc = PWC(n_classes=n_classes, metric=kernel, gamma=gamma, random_state=seed)
+    # pwc = LinearSVC(random_state=seed)
 
     if 'pal' in query_strategy:
         params = query_strategy.split('-')

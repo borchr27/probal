@@ -25,6 +25,7 @@ do
     wait
 done
 
+# run pal in a separate loop because otherwise it will time out.
 for j in 7 9 124 343 456 536 925 293 864 783
 do
     echo "pal" $j
